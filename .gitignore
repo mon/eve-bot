@@ -1,0 +1,5 @@
+build/
+dist/
+Mumble_pb2.py
+Mumble_pb2.pyc
+protoc.exe

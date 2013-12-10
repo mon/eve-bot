@@ -5,10 +5,9 @@ setup(
         console=['eve-bot.py'],
         options={
                 "py2exe":{
-                        #"unbuffered": True,
-                        #"optimize": 2,
-                        "includes": ["Mumble_pb2"]
-                        #"excludes": ["email"]
+                        "optimize": 2,
+                        "includes": ["Mumble_pb2"],
+                        "bundle_files": 2
                 }
         }
 )
