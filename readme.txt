@@ -59,6 +59,12 @@ Commandline options added for these settings are:
 -t, --token
 --relay-token
 
+Example usage with options:
+eve-bot.py --eavesdrop-in "Scrims" --relay-to "Team 1 Relay" -s team.server.net 
+    -p 64738 --token "relayToken" --relay-server big.spec.server 
+    --relay-port 13337 --relay-password "pie" --relay-token "specToken" 
+    -n "RelayBot" -d 90 -m "tbc-"
+
 After much use of the bot, there are times when packets are dropped or similar,
 these errors are now ignored and so do not kill the mimics.
 
