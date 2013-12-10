@@ -44,6 +44,30 @@ machine as the bot is running on.  The channels MUST exist; they can be the same
 if you wish, though this is likely to cause confusion.  Running the bot with no
 options will give a list of the available parameters.
 
+
+Building
+--------
+
+As protocol buffers come in .egg form for windows, they cannot be easily 
+included with eve without py2exe errors. To solve this, easy_install protobuf
+using the --always-unzip flag. If you've already installed in .egg form, delete
+PYTHONPATH\Lib\site-packages\protobuf-*.egg and then reinstall.
+
+Then, you must change the file under PYTHONPATH\Lib\site-packages\protobuf-*\
+    google\__init__.py
+"""
+import sys
+
+if not hasattr(sys, "frozen"):
+     __import__('pkg_resources').declare_namespace(__name__)
+"""
+
+This is due to py2exe being awful.
+
+Then compile as normal:
+        python setup.py py2exe
+
+
 Fork changes
 ------------
 

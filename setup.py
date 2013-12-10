@@ -6,7 +6,7 @@ setup(
         options={
                 "py2exe":{
                         "optimize": 2,
-                        "includes": ["Mumble_pb2"],
+                        "compressed": True,
                         "bundle_files": 2
                 }
         }
