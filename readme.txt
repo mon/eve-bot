@@ -44,6 +44,24 @@ machine as the bot is running on.  The channels MUST exist; they can be the same
 if you wish, though this is likely to cause confusion.  Running the bot with no
 options will give a list of the available parameters.
 
+Fork changes
+------------
+
+The mimics can be placed in a different server to the bot itself. Useful for
+low capacity team mumble servers!
+
+Tokens can be given to the bot to give it access to protected channels.
+
+Commandline options added for these settings are:
+--relay-server
+--relay-port
+--relay-password
+-t, --token
+--relay-token
+
+After much use of the bot, there are times when packets are dropped or similar,
+these errors are now ignored and so do not kill the mimics.
+
 
 Known Issues
 ------------

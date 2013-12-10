@@ -66,8 +66,8 @@ headerFormat=">HI"
 eavesdropper=None
 messageLookupMessage={Mumble_pb2.Version:0,Mumble_pb2.UDPTunnel:1,Mumble_pb2.Authenticate:2,Mumble_pb2.Ping:3,Mumble_pb2.Reject:4,Mumble_pb2.ServerSync:5,
         Mumble_pb2.ChannelRemove:6,Mumble_pb2.ChannelState:7,Mumble_pb2.UserRemove:8,Mumble_pb2.UserState:9,Mumble_pb2.BanList:10,Mumble_pb2.TextMessage:11,Mumble_pb2.PermissionDenied:12,
-        Mumble_pb2.ACL:13,Mumble_pb2.QueryUsers:14,Mumble_pb2.CryptSetup:15,Mumble_pb2.ContextActionAdd:16,Mumble_pb2.ContextAction:17,Mumble_pb2.UserList:18,Mumble_pb2.VoiceTarget:19,
-        Mumble_pb2.PermissionQuery:20,Mumble_pb2.CodecVersion:21}
+        Mumble_pb2.ACL:13,Mumble_pb2.QueryUsers:14,Mumble_pb2.CryptSetup:15,Mumble_pb2.ContextActionModify:16,Mumble_pb2.ContextAction:17,Mumble_pb2.UserList:18,Mumble_pb2.VoiceTarget:19,
+        Mumble_pb2.PermissionQuery:20,Mumble_pb2.CodecVersion:21,Mumble_pb2.UserStats:22,Mumble_pb2.SuggestConfig:23,Mumble_pb2.RequestBlob:24,Mumble_pb2.ServerConfig:25}
 messageLookupNumber={}
 threadNumber=0
 
@@ -124,8 +124,11 @@ class timedWatcher(threading.Thread):
                 packet=struct.pack(headerFormat,3,pbMess.ByteSize())+pbMess.SerializeToString()
                 self.socketLock.acquire()
                 while len(packet)>0:
-                    sent=self.socket.send(packet)
-                    packet = packet[sent:]
+                    try:
+                        sent=self.socket.send(packet)
+                        packet = packet[sent:]
+                    except:
+                        print time.strftime("%a, %d %b %Y %H:%M:%S +0000"), "Failed to send packet in time, ignoring."
                 self.socketLock.release()
                 self.nextPing=t+5
             if len(self.plannedPackets) > 0:
@@ -135,8 +138,11 @@ class timedWatcher(threading.Thread):
                         event = self.plannedPackets.popleft()
                         packet = event[1]
                         while len(packet)>0:
-                            sent=self.socket.send(packet)
-                            packet = packet[sent:]
+                            try:
+                                sent=self.socket.send(packet)
+                                packet = packet[sent:]
+                            except:
+                                print time.strftime("%a, %d %b %Y %H:%M:%S +0000"), "Failed to send packet in time, ignoring."
                         if len(self.plannedPackets)==0:
                             break
                     self.socketLock.release()
@@ -152,7 +158,7 @@ class timedWatcher(threading.Thread):
 
 
 class mumbleConnection(threading.Thread):
-    def __init__(self,host=None,nickname=None,channel=None,mimic=False,mimicPrefix=None,mimicChannel=None,relayDelay=None,password=None,verbose=False):
+    def __init__(self,host=None,relayhost=None,nickname=None,channel=None,mimic=False,mimicPrefix=None,mimicChannel=None,relayDelay=None,password=None,relayPassword=None,verbose=False,token=None,relayToken=None):
         global threadNumber
         i = threadNumber
         threadNumber+=1
@@ -164,6 +170,7 @@ class mumbleConnection(threading.Thread):
         self.socket=ssl.wrap_socket(tcpSock,ssl_version=ssl.PROTOCOL_TLSv1)
         self.socket.setsockopt(socket.SOL_TCP,socket.TCP_NODELAY,1)
         self.host=host
+        self.relayhost=relayhost
         self.nickname=nickname
         self.channel=channel
         self.mimic=mimic
@@ -179,7 +186,10 @@ class mumbleConnection(threading.Thread):
         self.mimicChannel=mimicChannel
         self.relayDelay=relayDelay
         self.password=password
+        self.relayPassword=relayPassword
         self.verbose=verbose
+        self.token=token
+        self.relayToken=relayToken
 
     def decodePDSInt(self,m,si=0):
         v = ord(m[si])
@@ -227,11 +237,15 @@ class mumbleConnection(threading.Thread):
     def readTotally(self,size):
         message=""
         while len(message)<size:
-            received=self.socket.recv(size-len(message))
-            message+=received
-            if len(received)==0:
-                print time.strftime("%a, %d %b %Y %H:%M:%S +0000"),self.threadName,"Server socket died while trying to read, immediate abort"
-                return None
+            try:
+                received=self.socket.recv(size-len(message))
+                message+=received
+                if len(received)==0:
+                    print time.strftime("%a, %d %b %Y %H:%M:%S +0000"),self.threadName,"Server socket died while trying to read, immediate abort"
+                    return None
+            except:
+                print time.strftime("%a, %d %b %Y %H:%M:%S +0000"),self.threadName,"Failed to read packet, ignoring and continuing"
+                return " "
         return message
 
     def parseMessage(self,msgType,stringMessage):
@@ -245,7 +259,8 @@ class mumbleConnection(threading.Thread):
             pbMess = Mumble_pb2.UserState()
             pbMess.session=self.session
             pbMess.channel_id=self.channelId
-            if not self.sendTotally(self.packageMessageForSending(messageLookupMessage[type(pbMess)],pbMess.SerializeToString())):
+            channelConnect=self.packageMessageForSending(messageLookupMessage[type(pbMess)],pbMess.SerializeToString())
+            if not self.sendTotally(channelConnect):
                 self.wrapUpThread(True)
                 return
             self.inChannel=True
@@ -308,7 +323,7 @@ class mumbleConnection(threading.Thread):
                         mimicNick=self.mimicPrefix+victimNick+str(i)
             i=i+1
         #Create mimic object and timed message queue etc.
-        mimic = mumbleConnection(self.host,mimicNick,self.mimicChannel,mimic=True,password=self.password,verbose=self.verbose)
+        mimic = mumbleConnection(self.relayhost,self.relayhost,mimicNick,self.mimicChannel,mimic=True,password=self.relayPassword,relayPassword=self.relayPassword,verbose=self.verbose,token=self.relayToken,relayToken=self.relayToken)
         pp=mimic.plannedPackets
         self.mimicList[session]={"plannedPackets":pp}
         self.mimicList[session]["setClose"]=mimic.setClose
@@ -333,6 +348,8 @@ class mumbleConnection(threading.Thread):
         meta=self.readTotally(6)
         if not meta:
             self.wrapUpThread(True)
+            return
+        if len(meta) != 6:
             return
         msgType,length=struct.unpack(headerFormat,meta)
         stringMessage=self.readTotally(length)
@@ -426,6 +443,8 @@ class mumbleConnection(threading.Thread):
         pbMess.username=self.nickname
         if self.password!=None:
             pbMess.password=self.password
+        if self.token!=None:
+            pbMess.tokens.append(self.token)
         celtversion=pbMess.celt_versions.append(-2147483637)
 
         initialConnect+=self.packageMessageForSending(messageLookupMessage[type(pbMess)],pbMess.SerializeToString())
@@ -471,12 +490,17 @@ def main():
     p.add_option("-r","--relay-to",help="Channel to relay speech to (MANDATORY)",action="store",type="string")
     p.add_option("-s","--server",help="Host to connect to (default %default)",action="store",type="string",default="localhost")
     p.add_option("-p","--port",help="Port to connect to (default %default)",action="store",type="int",default=64738)
+    p.add_option("--relay-server",help="Remote host to relay to (default %default)",action="store",type="string",default="localhost")
+    p.add_option("--relay-port",help="Remote port to relay to (default %default)",action="store",type="int",default=64738)
     p.add_option("-n","--nick",help="Nickname for the eavesdropper (default %default)",action="store",type="string",default="-Eve-")
     p.add_option("-d","--delay",help="Time to delay speech by in seconds (default %default)",action="store",type="float",default=90)
     p.add_option("-m","--mimic-prefix",help="Prefix for mimic-bots (default %default)",action="store",type="string",default="Mimic-")
     p.add_option("-v","--verbose",help="Outputs and translates all messages received from the server",action="store_true",default=False)
     p.add_option("--password",help="Password for server, if any",action="store",type="string")
-
+    p.add_option("--relay-password",help="Password for relay server, if any",action="store",type="string")
+    p.add_option("-t","--token",help="Token for eavesdropper, if any",action="store",type="string")
+    p.add_option("--relay-token",help="Token for relay bots, if any",action="store",type="string")
+    
     if len(warning)>0:
         print warning
     o, arguments = p.parse_args()
@@ -489,13 +513,14 @@ def main():
         sys.exit(1)
 
     host=(o.server,o.port)
+    relayHost=(o.relay_server,o.relay_port)
 
-    if o.eavesdrop_in=="Root":
+    if o.eavesdrop_in=="Root" and host == relayHost:
         p.print_help()
         print "\nEavesdrop channel cannot be root (or it would briefly attempt to mimic everyone who joined - including mimics)"
         sys.exit(1)
 
-    eavesdropper = mumbleConnection(host,o.nick,o.eavesdrop_in,mimicPrefix=o.mimic_prefix,mimicChannel=o.relay_to,relayDelay=o.delay,password=o.password,verbose=o.verbose)
+    eavesdropper = mumbleConnection(host,relayHost,o.nick,o.eavesdrop_in,mimicPrefix=o.mimic_prefix,mimicChannel=o.relay_to,relayDelay=o.delay,password=o.password,relayPassword=o.relay_password,verbose=o.verbose,token=o.token,relayToken=o.relay_token)
     pp=eavesdropper.plannedPackets
     eavesdropper.start()
 
